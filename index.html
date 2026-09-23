@@ -1,0 +1,94 @@
+<!doctype html>
+<meta charset=utf-8>
+<title>Claude Opus 5.5, four overnight builds</title>
+<meta name=viewport content="width=device-width,initial-scale=1">
+<meta property="og:title" content="Claude Opus 5.5, four overnight builds">
+<meta property="og:description" content="One detailed brief each, Claude Code running on its own for up to six hours, no human edits. A freeride game, a voxel diorama, a city through five decades and a pirate ship at sunset.">
+<meta property="og:image" content="https://nipale-ai.github.io/opus-5-5-overnight-builds/vorschau-fall-line.jpg">
+<style>
+:root{--bg:#0d0f14;--kar:#151922;--rand:#242a36;--t:#e8eaef;--d:#98a1b2;--akz:#f0a868}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--t);font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}
+.wrap{max-width:1180px;margin:0 auto;padding:56px 22px 80px}
+h1{font-size:clamp(1.7rem,4vw,2.6rem);line-height:1.15;margin:0 0 14px;letter-spacing:-.02em;font-weight:650}
+.lead{color:var(--d);font-size:1.06rem;max-width:64ch;margin:0 0 10px}
+.meta{color:var(--d);font-size:.88rem;margin:26px 0 0;padding-top:18px;border-top:1px solid var(--rand)}
+.meta b{color:var(--t);font-weight:600}
+.meta a{color:var(--akz)}
+.karten{display:grid;gap:22px;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));margin:40px 0 0}
+.k{background:var(--kar);border:1px solid var(--rand);border-radius:14px;overflow:hidden;text-decoration:none;color:inherit;display:flex;flex-direction:column;transition:border-color .15s,transform .15s}
+.k:hover{border-color:var(--akz);transform:translateY(-2px)}
+.k img{display:block;width:100%;aspect-ratio:16/9;object-fit:cover;background:#0a0c10}
+.kt{padding:16px 18px 18px}
+.kt h2{margin:0 0 3px;font-size:1.02rem;font-weight:650}
+.kt .welt{color:var(--akz);font-size:.9rem;margin:0 0 10px}
+.kt dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:2px 12px;font-size:.84rem;color:var(--d)}
+.kt dd{margin:0;color:var(--t);font-variant-numeric:tabular-nums}
+.oeffnen{margin-top:12px;font-size:.84rem;color:var(--akz)}
+footer{margin-top:48px;padding-top:20px;border-top:1px solid var(--rand);color:var(--d);font-size:.83rem}
+footer a{color:var(--akz)}
+</style>
+<div class=wrap>
+<h1>Claude Opus 5.5, four overnight builds</h1>
+<p class=lead>Each build got one detailed brief and a time budget. Claude Opus 5.5 then worked alone in Claude Code: planning, writing code, taking its own screenshots, fixing what it saw. Nobody answered questions, nobody touched the code.</p>
+<p class=lead>What you open below is exactly what it shipped. All four stopped on their own before the budget ran out.</p>
+
+<div class=karten>
+
+<a class=k href="fall-line/">
+  <img fetchpriority=high src="vorschau-fall-line.jpg" alt="Freeride snowboard game built by Claude Opus 5.5">
+  <div class=kt>
+    <h2>Fall Line</h2>
+    <p class=welt>A freeride snowboard and ski game on one huge mountain</p>
+    <dl><dt>Work time</dt><dd>339 min of 6 h</dd><dt>Commits</dt><dd>111</dd><dt>Try</dt><dd>M opens the drop-in map, any key takes over the demo rider</dd></dl>
+    <div class=oeffnen>Play it →</div>
+  </div>
+</a>
+
+<a class=k href="tidewater/">
+  <img src="vorschau-tidewater.jpg" alt="Voxel diorama built by Claude Opus 5.5">
+  <div class=kt>
+    <h2>Operation Tidewater</h2>
+    <p class=welt>A living voxel diorama with its own camera tour</p>
+    <dl><dt>Work time</dt><dd>205 min of 4 h</dd><dt>Commits</dt><dd>65</dd></dl>
+    <div class=oeffnen>Open it →</div>
+  </div>
+</a>
+
+<a class=k href="chrono-city/">
+  <img src="vorschau-chrono-city.jpg" alt="City block through five decades, built by Claude Opus 5.5">
+  <div class=kt>
+    <h2>Chrono City</h2>
+    <p class=welt>One Toronto block, 1945 to 2025</p>
+    <dl><dt>Work time</dt><dd>164 min of 4 h</dd><dt>Commits</dt><dd>66</dd><dt>Try</dt><dd>Keys 1 to 5 jump between decades</dd></dl>
+    <div class=oeffnen>Open it →</div>
+  </div>
+</a>
+
+<a class=k href="pirate-ship/">
+  <img src="vorschau-pirate-ship.jpg" alt="Pirate ship at sunset built by Claude Opus 5.5">
+  <div class=kt>
+    <h2>Pirate Ship at Sunset</h2>
+    <p class=welt>A real-time cinematic, Space fires a broadside</p>
+    <dl><dt>Work time</dt><dd>137 min of 3 h</dd><dt>Commits</dt><dd>86</dd></dl>
+    <div class=oeffnen>Open it →</div>
+  </div>
+</a>
+
+</div>
+
+<p class=meta>
+<b>Model:</b> Claude Opus 5.5, effort xhigh, in Claude Code (headless, no MCP servers) ·
+<b>Prompts:</b> <a href="https://github.com/Nipale-ai/opus-5-5-overnight-builds/tree/main/briefs">every brief exactly as it was sent</a>, plus the model’s own README for each build ·
+<b>Assets:</b> everything is procedural code, no image, music or video generation models were allowed ·
+<b>Preview images:</b> frames from recordings of the builds running, not staged.
+</p>
+<p class=meta style="margin-top:22px">
+<b>Honest notes.</b> Chrono City ran twice: I stopped the first attempt because the machine it ran on was overheating, the version here is a fresh second run with the same brief. Fall Line’s brief asked it to recreate the gameplay of a well known freeride game without using its name or any of its assets.
+</p>
+
+<footer>
+Built overnight on 23 September 2026. Three of these briefs are now running on a local model for comparison.
+&nbsp;·&nbsp; <a href="https://github.com/Nipale-ai/opus-5-5-overnight-builds">Source on GitHub</a>
+</footer>
+</div>
