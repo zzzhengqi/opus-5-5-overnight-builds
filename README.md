@@ -1,6 +1,8 @@
 # Fall Line 简体中文试玩
 
-[进入中文版](https://zzzhengqi.github.io/opus-5-5-overnight-builds/fall-line/) · [试玩首页](https://zzzhengqi.github.io/opus-5-5-overnight-builds/)
+[中文版短地址](https://zzzhengqi.github.io/20261003-4/) · [原试玩地址](https://zzzhengqi.github.io/opus-5-5-overnight-builds/fall-line/) · [试玩首页](https://zzzhengqi.github.io/opus-5-5-overnight-builds/)
+
+短地址由 [20261003-4 仓库](https://github.com/zzzhengqi/20261003-4) 提供，游戏内容与原地址相同。更新试玩时，须将本仓库 `fall-line/` 下的三个游戏文件同步到短地址仓库根目录。
 
 本 Fork 已汉化 Fall Line 的界面、按钮、地图、操作说明、赛事、结算、动作提示与场景文字。按任意键开始，`M` 打开地图，`Esc` 暂停并查看操作说明。其余三个项目保留原版。
 
