@@ -49,6 +49,19 @@
       .fl-rocket-track{flex:1;background:#ffffff18;height:5px;overflow:hidden}.fl-rocket-track i{height:100%;display:block;transform-origin:left;background:#7fe7ff}.fl-rocket-track.heat i{background:#ff8a52}
       .fl-rocket-status{color:#eef8fc;letter-spacing:.04em}.fl-upgrade[data-thrust=true]{border-color:#ff8a52;box-shadow:0 0 25px #ff7a201c}
       .fl-assist-hint{padding-top:7px;color:#b5d1df;font:500 13px var(--fd)}
+      .fl-hud-panel-shell{position:absolute;bottom:34px;pointer-events:auto}
+      .fl-hud-controls-shell{left:44px;width:max-content;min-width:300px}
+      .fl-hud-upgrade-shell{left:50%;transform:translateX(-50%);width:520px}
+      .fl-hud-panel-shell[data-panel-mode=hidden]{width:auto;min-width:0}
+      .fl-hud-panel-shell .fl-controls,.fl-hud-panel-shell .fl-upgrade{position:relative;left:auto;bottom:auto;transform:none}
+      .fl-hud-panel-tools{display:flex;align-items:center;gap:8px;padding:7px 10px;background:#071421e6;border:1px solid #7fe7ff40;border-bottom:0}
+      .fl-hud-panel-title{flex:1;color:#c9e7f4;font:600 14px var(--fd)}
+      .fl-hud-panel-shell .fl-panel-choice,.fl-hud-panel-shell .fl-panel-launcher{color:#eaf7ff;border:1px solid #7fe7ff55;background:#071421df;padding:5px 10px;font:600 14px var(--fd);cursor:pointer}
+      .fl-hud-panel-shell .fl-panel-choice[aria-pressed=true]{color:#7fe7ff;border-color:#7fe7ff;background:#7fe7ff18}
+      .fl-hud-panel-shell .fl-panel-launcher{padding:9px 14px;color:#bfefff}
+      .fl-hud-panel-shell button:hover,.fl-hud-panel-shell button:focus-visible{outline:2px solid #7fe7ff;outline-offset:2px}
+      .fl-hud-panel-shell [hidden]{display:none!important}
+      .fl-root.is-modal .fl-hud-panel-shell,.fl-root[data-mode=menu] .fl-hud-panel-shell,.fl-root[data-mode=results] .fl-hud-panel-shell{visibility:hidden;pointer-events:none}
     `;
     document.head.appendChild(css);
     panel = document.createElement('div');
@@ -75,6 +88,51 @@
       hint([...rows, ...extra]);
     };
     game.ui.setControlsSheet([...(game.ui._sheet || []), {title: '火箭单板、暴雪与晚霞', rows: [['B', '普通单板 ⇄ 火箭单板'], ['F', '按住推进 · 松开冷却'], ['N', '晴天 ⇄ 暴雪'], ['H', '清晨 ⇄ 粉紫晚霞'], ['松开方向键', '空中自动回正 · 落地辅助'], ['十字键 →（手柄）', '装备 / 卸下火箭单板'], ['十字键 ←（手柄）', '按住火箭推进']]}]);
+    addPanelVisibility();
+  }
+
+  function addPanelVisibility(){
+    const storageKey='fallline.hud-panels.v1';
+    let saved={};
+    try{saved=JSON.parse(localStorage.getItem(storageKey)||'{}')||{};}catch{}
+    const modes={controls:saved.controls==='hidden'?'hidden':'fixed',upgrade:saved.upgrade==='hidden'?'hidden':'fixed'};
+    for(const [name,node,label] of [['controls',game.ui.$.controls,'按键说明'],['upgrade',panel,'天气与火箭']]){
+      const shell=document.createElement('div');
+      shell.className=`fl-hud-panel-shell fl-hud-${name}-shell`;
+      shell.dataset.panel=name;
+      const tools=document.createElement('div');tools.className='fl-hud-panel-tools';
+      tools.innerHTML=`<span class="fl-hud-panel-title">${label}</span><button type="button" class="fl-panel-choice" data-panel-action="pin" aria-label="固定显示${label}">固定显示</button><button type="button" class="fl-panel-choice" data-panel-action="hide" aria-label="隐藏${label}">隐藏</button>`;
+      const launcher=document.createElement('button');launcher.type='button';launcher.className='fl-panel-launcher';
+      launcher.dataset.panelAction='show';launcher.textContent=`显示${label}`;launcher.title='点击恢复固定显示';
+      node.id||=`fl-hud-${name}-body`;
+      launcher.setAttribute('aria-controls',node.id);
+      node.parentNode.insertBefore(shell,node);shell.append(tools,node,launcher);
+      const pin=tools.querySelector('[data-panel-action=pin]'),hide=tools.querySelector('[data-panel-action=hide]');
+      pin.setAttribute('aria-controls',node.id);hide.setAttribute('aria-controls',node.id);
+      const render=()=>{
+        const fixed=modes[name]==='fixed';shell.dataset.panelMode=modes[name];
+        node.hidden=!fixed;tools.hidden=!fixed;launcher.hidden=fixed;
+        pin.setAttribute('aria-pressed',String(fixed));launcher.setAttribute('aria-expanded',String(fixed));
+      };
+      const choose=(event,mode)=>{
+        modes[name]=mode;render();game.input.lastActivity=performance.now();
+        try{localStorage.setItem(storageKey,JSON.stringify(modes));}catch{}
+        if(event.detail===0)(mode==='fixed'?pin:launcher).focus({preventScroll:true});
+        else event.currentTarget.blur();
+      };
+      pin.addEventListener('click',event=>choose(event,'fixed'));
+      hide.addEventListener('click',event=>choose(event,'hidden'));
+      launcher.addEventListener('click',event=>choose(event,'fixed'));
+      // Panel clicks change presentation only; keyboard riding remains available after a mouse click.
+      for(const type of ['pointerdown','pointerup','mousedown','mouseup'])shell.addEventListener(type,event=>{
+        if(type==='pointerdown')game.input.lastActivity=performance.now();
+        event.stopPropagation();
+      });
+      for(const type of ['keydown','keyup'])shell.addEventListener(type,event=>{
+        if(event.target.tagName==='BUTTON'&&(event.code==='Space'||event.code==='Enter'))event.stopPropagation();
+      });
+      render();
+    }
   }
 
   // Every flake has a persistent world position, downward terminal velocity and terrain collision.
