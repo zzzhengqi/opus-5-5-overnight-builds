@@ -2,18 +2,25 @@
 (() => {
   'use strict';
   const clamp = (n, a = 0, b = 1) => Math.max(a, Math.min(b, n));
-  const weatherNames = {clear: '晴天', snow: '降雪', blizzard: '暴雪'};
-  let game, engine, snow, rocket, panel, weatherButton, boardButton, status, fuelBar, heatBar, engineSound;
+  const weatherNames = {clear: '晴天', snow: '暴雪', blizzard: '暴雪'};
+  let game, engine, snow, rocket, panel, weatherButton, boardButton, timeButton, status, fuelBar, heatBar, engineSound;
   let storm = 0, precipitation = 0, elapsed = 0, padToggleHeld = false, panelKey = '';
-  const state = {rocket: false, fuel: 100, heat: 0, throttle: 0, locked: false, rechargeDelay: 0, weather: 'clear', snowImpacts: 0};
+  const state = {rocket: false, fuel: 100, heat: 0, throttle: 0, locked: false, rechargeDelay: 0, weather: 'blizzard', snowImpacts: 0, assist: true, assistedLandings: 0};
+
+  // Right click is inert, including the activity handler that normally starts the demo.
+  for (const type of ['contextmenu', 'pointerdown', 'pointerup', 'mousedown', 'mouseup', 'auxclick']) {
+    window.addEventListener(type, event => {
+      if (type === 'contextmenu' || event.button === 2) { event.preventDefault(); event.stopImmediatePropagation(); }
+    }, {capture: true});
+  }
 
   function setWeather(value) {
     if (!Object.hasOwn(weatherNames, value)) return;
-    game.G.weather = value;
+    game.G.weather = value === 'snow' ? 'blizzard' : value;
     game.ui.popup(`天气：${weatherNames[value]}${value === 'blizzard' ? ' · 阵风与低能见度' : ''}`, 'info');
   }
   function cycleWeather() {
-    const order = ['clear', 'snow', 'blizzard'];
+    const order = ['clear', 'blizzard'];
     setWeather(order[(order.indexOf(game.G.weather) + 1) % order.length]);
   }
   function setRocket(value) {
@@ -31,7 +38,7 @@
   function addPanel() {
     const css = document.createElement('style');
     css.textContent = `
-      .fl-upgrade{position:absolute;bottom:34px;left:50%;transform:translateX(-50%);width:450px;padding:12px 16px;border-top:2px solid #7fe7ff80;background:linear-gradient(125deg,#071421e6,#071421b3);pointer-events:auto;font-style:normal}
+      .fl-upgrade{position:absolute;bottom:34px;left:50%;transform:translateX(-50%);width:520px;padding:12px 16px;border-top:2px solid #7fe7ff80;background:linear-gradient(125deg,#071421e6,#071421b3);pointer-events:auto;font-style:normal}
       .fl-upgrade-buttons{display:flex;gap:8px}.fl-upgrade button{flex:1;background:#ffffff0a;color:#eaf7ff;border:1px solid #7fe7ff40;padding:8px;font:700 16px var(--fd);cursor:pointer;white-space:nowrap}
       .fl-root.is-modal .fl-upgrade,.fl-root[data-mode=menu] .fl-upgrade,.fl-root[data-mode=results] .fl-upgrade{visibility:hidden;pointer-events:none}
       .fl-sheet{max-height:960px;overflow-y:auto;overscroll-behavior:contain;scrollbar-color:#7fe7ff60 #071421}
@@ -41,17 +48,20 @@
       .fl-rocket-readout{padding-top:9px;color:#b5d1df;font:600 14px var(--fd)}.fl-rocket-readout[hidden]{display:none}.fl-rocket-bars{display:flex;gap:14px;margin-top:7px}.fl-rocket-bars label{display:flex;align-items:center;gap:7px;flex:1}
       .fl-rocket-track{flex:1;background:#ffffff18;height:5px;overflow:hidden}.fl-rocket-track i{height:100%;display:block;transform-origin:left;background:#7fe7ff}.fl-rocket-track.heat i{background:#ff8a52}
       .fl-rocket-status{color:#eef8fc;letter-spacing:.04em}.fl-upgrade[data-thrust=true]{border-color:#ff8a52;box-shadow:0 0 25px #ff7a201c}
+      .fl-assist-hint{padding-top:7px;color:#b5d1df;font:500 13px var(--fd)}
     `;
     document.head.appendChild(css);
     panel = document.createElement('div');
     panel.className = 'fl-upgrade';
-    panel.innerHTML = `<div class="fl-upgrade-buttons"><button type="button" data-action="weather" aria-label="切换天气">天气：晴天 <kbd>N</kbd></button><button type="button" data-action="board" aria-label="装备火箭单板" aria-pressed="false">普通单板 <kbd>B</kbd></button></div><div class="fl-rocket-readout" hidden><div class="fl-rocket-status">按住 F 火箭推进 · 松开冷却</div><div class="fl-rocket-bars"><label>燃料 <span class="fl-rocket-track"><i></i></span></label><label>温度 <span class="fl-rocket-track heat"><i></i></span></label></div></div>`;
+    panel.innerHTML = `<div class="fl-upgrade-buttons"><button type="button" data-action="weather" aria-label="切换天气">天气：暴雪 <kbd>N</kbd></button><button type="button" data-action="time" aria-label="切换清晨与粉紫晚霞">粉紫晚霞 <kbd>H</kbd></button><button type="button" data-action="board" aria-label="装备火箭单板" aria-pressed="false">普通单板 <kbd>B</kbd></button></div><div class="fl-rocket-readout" hidden><div class="fl-rocket-status">按住 F 火箭推进 · 松开冷却</div><div class="fl-rocket-bars"><label>燃料 <span class="fl-rocket-track"><i></i></span></label><label>温度 <span class="fl-rocket-track heat"><i></i></span></label></div></div><div class="fl-assist-hint">落地辅助已开启 · 松开方向键自动回正</div>`;
     game.ui.$.hud.appendChild(panel);
     weatherButton = panel.querySelector('[data-action=weather]');
     boardButton = panel.querySelector('[data-action=board]');
+    timeButton = panel.querySelector('[data-action=time]');
     status = panel.querySelector('.fl-rocket-status');
     [fuelBar, heatBar] = panel.querySelectorAll('.fl-rocket-track i');
     weatherButton.addEventListener('click', cycleWeather);
+    timeButton.addEventListener('click', () => game.setTimeOfDay(game.G.tod === 'golden' ? 'morning' : 'golden'));
     boardButton.addEventListener('click', () => setRocket(!state.rocket));
     window.addEventListener('keydown', event => {
       if (event.repeat || event.ctrlKey || event.metaKey || event.altKey || /INPUT|TEXTAREA|SELECT/.test(event.target.tagName)) return;
@@ -64,13 +74,13 @@
       if (state.rocket && game.G.discipline === 'snowboard' && extra.length) extra.push([game.input.device === 'gamepad' ? '十字键 ←' : 'F', '按住火箭推进']);
       hint([...rows, ...extra]);
     };
-    game.ui.setControlsSheet([...(game.ui._sheet || []), {title: '火箭单板与暴雪', rows: [['B', '普通单板 ⇄ 火箭单板'], ['F', '按住推进 · 松开冷却'], ['N', '晴天 ⇄ 降雪 ⇄ 暴雪'], ['十字键 →（手柄）', '装备 / 卸下火箭单板'], ['十字键 ←（手柄）', '按住火箭推进']]}]);
+    game.ui.setControlsSheet([...(game.ui._sheet || []), {title: '火箭单板、暴雪与晚霞', rows: [['B', '普通单板 ⇄ 火箭单板'], ['F', '按住推进 · 松开冷却'], ['N', '晴天 ⇄ 暴雪'], ['H', '清晨 ⇄ 粉紫晚霞'], ['松开方向键', '空中自动回正 · 落地辅助'], ['十字键 →（手柄）', '装备 / 卸下火箭单板'], ['十字键 ←（手柄）', '按住火箭推进']]}]);
   }
 
   // Every flake has a persistent world position, downward terminal velocity and terrain collision.
   // Only flakes leaving the simulation volume respawn; camera motion never moves surviving flakes.
   function createSnow() {
-    const count = 4800;
+    const count = 6500;
     const positions = new Float32Array(count * 3);
     const sizes = new Float32Array(count);
     const velocities = new Float32Array(count * 3);
@@ -78,17 +88,19 @@
     const sampledAt = new Float32Array(count * 2);
     const seeds = new Float32Array(count);
     const geometry = new engine.BufferGeometry();
-    for (let i = 0; i < count; i++) { seeds[i] = Math.random(); sizes[i] = .014 + Math.random() * .028; }
+    for (let i = 0; i < count; i++) { seeds[i] = Math.random(); sizes[i] = .06 + Math.pow(Math.random(), 1.5) * .14; }
     geometry.setAttribute('position', new engine.BufferAttribute(positions, 3));
     geometry.setAttribute('flakeSize', new engine.BufferAttribute(sizes, 1));
+    geometry.setAttribute('flakeSeed', new engine.BufferAttribute(seeds, 1));
     const material = new engine.ShaderMaterial({
-      uniforms: {uPixels: {value: 900}, uAmount: {value: 0}, uWind: {value: 0}, uFog: {value: 0}, uCamera: {value: new engine.Vector3()}, uStorm: {value: 0}},
-      vertexShader: `attribute float flakeSize; uniform float uPixels; uniform vec3 uCamera; varying float vDistance; varying float vSeed;
-        void main(){vec4 mv=modelViewMatrix*vec4(position,1.0);vDistance=length(mv.xyz);vSeed=fract(position.x*17.3+position.z*8.1);gl_Position=projectionMatrix*mv;gl_PointSize=clamp(flakeSize*uPixels/max(0.5,-mv.z),1.0,6.0);}`,
-      fragmentShader: `uniform float uAmount;uniform float uWind;uniform float uFog;uniform float uStorm;varying float vDistance;varying float vSeed;
-        void main(){vec2 p=gl_PointCoord-0.5;p.x*=1.0+uWind*0.12;float r=length(p);float a=(1.0-smoothstep(0.12,0.49,r))*uAmount;
-        a*=smoothstep(0.5,2.8,vDistance)*(1.0-smoothstep(38.0,65.0,vDistance));a*=mix(0.65,0.32,uStorm);if(a<0.01)discard;
-        vec3 color=mix(vec3(0.80,0.86,0.92),vec3(0.91,0.94,0.97),vSeed);gl_FragColor=vec4(color,a);
+      uniforms: {uPixels: {value: 900}, uAmount: {value: 0}, uWind: {value: 0}, uStorm: {value: 0}},
+      vertexShader: `attribute float flakeSize;attribute float flakeSeed;uniform float uPixels;varying float vDistance;varying float vSeed;
+        void main(){vec4 mv=modelViewMatrix*vec4(position,1.0);vDistance=length(mv.xyz);vSeed=flakeSeed;gl_Position=projectionMatrix*mv;gl_PointSize=clamp(flakeSize*uPixels/max(0.5,-mv.z),3.0,14.0);}`,
+      fragmentShader: `uniform float uAmount;uniform float uWind;uniform float uStorm;varying float vDistance;varying float vSeed;
+        void main(){vec2 p=gl_PointCoord-0.5;float angle=vSeed*6.283; p=mat2(cos(angle),-sin(angle),sin(angle),cos(angle))*p;
+        float r=length(p);float phi=atan(p.y,p.x);float shape=0.34+0.025*cos(phi*6.0+vSeed*9.0)+0.025*sin(phi*3.0+vSeed*15.0);float a=(1.0-smoothstep(shape-0.09,shape+0.06,r))*uAmount;
+        a*=smoothstep(0.25,1.4,vDistance)*(1.0-smoothstep(24.0,44.0,vDistance));a*=0.86+vSeed*0.14;if(a<0.01)discard;
+        vec3 color=mix(vec3(0.87,0.90,1.0),vec3(1.45),1.0-smoothstep(0.1,0.4,r));gl_FragColor=vec4(color,a);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
         }`, transparent: true, depthWrite: false, depthTest: true
@@ -98,27 +110,29 @@
     game.scene.add(points);
     function respawn(i, fill) {
       const c = game.camera.position, j = i * 3;
-      const x = c.x + (Math.random() - .5) * 105, z = c.z + (Math.random() - .5) * 105;
+      const x = c.x + (Math.random() - .5) * 52, z = c.z + (Math.random() - .5) * 52;
       const floor = game.world.height(x, z);
-      const ceiling = Math.max(floor + 14, c.y + 22);
+      const base = Math.max(floor + .25, c.y - 12);
+      const ceiling = Math.max(base + 4, c.y + 16);
       positions[j] = x; positions[j+2] = z;
-      positions[j+1] = fill ? floor + .3 + Math.random() * (ceiling-floor-.3) : ceiling + Math.random()*8;
+      positions[j+1] = fill ? base + Math.random() * (ceiling-base) : ceiling + Math.random()*3;
       floors[i] = floor; sampledAt[i*2] = x; sampledAt[i*2+1] = z;
       velocities[j] = 0; velocities[j+1] = -(.8 + seeds[i]*1.5); velocities[j+2] = 0;
     }
     for (let i = 0; i < count; i++) respawn(i, true);
     // Wind-transported powder is attached to the current terrain height, not an airborne glowing cloud.
-    const groundCount = 320, groundPositions = new Float32Array(groundCount*3), groundSizes = new Float32Array(groundCount);
+    const groundCount = 420, groundPositions = new Float32Array(groundCount*3), groundSizes = new Float32Array(groundCount), groundSeeds = new Float32Array(groundCount);
     const groundGeometry = new engine.BufferGeometry();
-    for (let i=0; i<groundCount; i++) groundSizes[i]=.035+Math.random()*.075;
+    for (let i=0; i<groundCount; i++) { groundSizes[i]=.09+Math.random()*.10; groundSeeds[i]=Math.random(); }
     groundGeometry.setAttribute('position',new engine.BufferAttribute(groundPositions,3));
     groundGeometry.setAttribute('flakeSize',new engine.BufferAttribute(groundSizes,1));
+    groundGeometry.setAttribute('flakeSeed',new engine.BufferAttribute(groundSeeds,1));
     const groundMaterial = material.clone();
     const ground = new engine.Points(groundGeometry,groundMaterial);ground.frustumCulled=false;ground.name='Terrain-following spindrift';game.scene.add(ground);
     let active = 0, first = true;
     function update(dt, time, windX, windZ) {
       const c=game.camera.position;
-      const next=precipitation<.015?0:Math.round(1600+storm*3200);
+      const next=precipitation<.015?0:Math.round(5200+storm*1300);
       if(next>active)for(let i=active;i<next;i++)respawn(i,true);
       active=next;geometry.setDrawRange(0,active);points.visible=active>0;
       const drag=1-Math.exp(-dt*1.6);
@@ -132,11 +146,11 @@
           floors[i]=game.world.height(positions[j],positions[j+2]);sampledAt[i*2]=positions[j];sampledAt[i*2+1]=positions[j+2];
         }
         if(positions[j+1]<=floors[i]+.04){state.snowImpacts++;respawn(i,false);}
-        else if(Math.abs(positions[j]-c.x)>59||Math.abs(positions[j+2]-c.z)>59||positions[j+1]>c.y+65||positions[j+1]<c.y-85)respawn(i,false);
+        else if(Math.abs(positions[j]-c.x)>32||Math.abs(positions[j+2]-c.z)>32||positions[j+1]>c.y+38||positions[j+1]<c.y-25)respawn(i,true);
       }
       geometry.attributes.position.needsUpdate=true;
       const uniforms=material.uniforms;
-      uniforms.uPixels.value=game.renderer.domElement.height*.8;uniforms.uAmount.value=precipitation;uniforms.uStorm.value=storm;uniforms.uWind.value=Math.hypot(windX,windZ);uniforms.uCamera.value.copy(c);
+      uniforms.uPixels.value=game.renderer.domElement.height*.8;uniforms.uAmount.value=precipitation;uniforms.uStorm.value=storm;uniforms.uWind.value=Math.hypot(windX,windZ);
       ground.visible=storm>.02;
       for(let i=0;i<groundCount;i++){
         const j=i*3;
@@ -205,6 +219,54 @@
     const board=game.rider.M.board;
     if(rocket&&board&&rocket.root.parent!==board){rocket.root.removeFromParent();board.add(rocket.root);}
   }
+  function installLandingAssist(){
+    const p=game.phys, air=p._stepAir.bind(p), land=p._land.bind(p);
+    const up=new engine.Vector3(),forward=new engine.Vector3(),side=new engine.Vector3();
+    const matrix=new engine.Matrix4(),target=new engine.Quaternion();
+    let releasedFor=0;
+    function targetFor(normal){
+      up.set(0,1,0).applyQuaternion(p.q);
+      side.set(1,0,0).applyQuaternion(p.q);
+      forward.copy(p.v).addScaledVector(normal,-p.v.dot(normal));
+      if(forward.lengthSq()<.1)forward.copy(p.f).addScaledVector(normal,-p.f.dot(normal));
+      forward.normalize();
+      if(forward.dot(side)<0)forward.negate(); // Switch landings remain valid.
+      side.crossVectors(forward,normal).normalize();
+      forward.crossVectors(normal,side).normalize();
+      matrix.makeBasis(forward,normal,side);target.setFromRotationMatrix(matrix);
+    }
+    p._stepAir=function(dt,controls){
+      if(state.assist&&!controls.ai&&game.G.mode!=='demo'){
+        const steering=!p.spinBlock&&!p.charging&&Math.abs(controls.x)>.18;
+        const flipping=!p.flipBlock&&!p.charging&&Math.abs(controls.y)>.18;
+        if(steering||flipping)releasedFor=0;else releasedFor+=dt;
+        if(releasedFor>.075){
+          p._predictLanding();targetFor(p.landN);
+          const clearance=p.p.y-p.world.height(p.p.x,p.p.z);
+          const nearGround=clearance<Math.max(1.5,-p.v.y*.30);
+          p.q.slerp(target,1-Math.exp(-dt*(nearGround?14:8)));
+          p.w.multiplyScalar(Math.exp(-dt*14));
+          p.spinLock=true;
+        }
+      }
+      air(dt,controls);
+    };
+    p._land=function(){
+      if(state.assist&&game.G.mode!=='demo'){
+        const normal=p._sampleGround().clone();
+        up.set(0,1,0).applyQuaternion(p.q);
+        const tilt=Math.acos(clamp(up.dot(normal),-1,1)),impact=-p.v.dot(normal);
+        // Recover an imperfect approach, while upside-down landings and major impacts can still crash.
+        if(tilt<Math.PI*105/180&&impact<23){
+          targetFor(normal);p.q.slerp(target,.82);p.w.multiplyScalar(.25);
+          if(impact>12.5)p.v.addScaledVector(normal,impact-12.5);
+          state.assistedLandings++;
+        }
+      }
+      land();releasedFor=0;
+      if(!p.crashed)p.grace=Math.max(p.grace||0,1.7);
+    };
+  }
   function installPhysics(){
     const step=game.phys.step.bind(game.phys);
     const force=new engine.Vector3();
@@ -234,6 +296,7 @@
     game.rider.setDiscipline=function(...args){rocket.root.removeFromParent();const value=discipline(...args);attachRocket();return value;};
     const reset=game.phys.reset.bind(game.phys);
     game.phys.reset=function(...args){state.throttle=0;return reset(...args);};
+    installLandingAssist();
   }
   function install(dbg, nativeEngine){
     game=dbg;engine=nativeEngine;
@@ -241,6 +304,8 @@
     game.particles.setSnowfall=function(){this.snowfall.visible=false;};
     snow=createSnow();rocket=createRocket();installPhysics();addPanel();
     window.GAME.upgrades={state,setWeather,cycleWeather,setRocket,snow,rocket};
+    game.G.weather='blizzard';game.G.wx=1;storm=1;precipitation=1;
+    game.setTimeOfDay('golden');
     game.G.hintKey='';
   }
   function updateEngineSound(){
@@ -274,23 +339,27 @@
     const windX=1.1+storm*(9+gust*13),windZ=.6+storm*(3+gust*6);
     game.particles.uniforms.uWind.value.set(windX,0,windZ);game.particles.dust.visible=false;
     if(precipitation>.01){
-      game.scene.fog.density=(game.G.fogDensity||.000078)*(1-precipitation)+precipitation*(.0022+storm*(.008+gust*.003));
-      game.scene.fog.color.setRGB(.65-storm*.13,.72-storm*.13,.79-storm*.12);
+      game.scene.fog.density=(game.G.fogDensity||.000078)*(1-precipitation)+precipitation*(.0009+storm*(.0009+gust*.0005));
+      if(game.G.tod==='golden')game.scene.fog.color.setRGB(.83,.59,.77);
+      else game.scene.fog.color.setRGB(.65-storm*.13,.72-storm*.13,.79-storm*.12);
       game.sky.uniforms.uOvercast.value=precipitation;
       game.terrain.uniforms.uSparkle.value*=1-storm*.8;
       game.terrain.uniforms.uWind.value.set(windX,windZ);
     }
+    game.sky.uniforms.uSunset.value=game.G.tod==='golden'?1:0;
+    if(game.G.tod==='golden')game.ambientLight.color.copy(game.G.hemiSky).lerp(game.G.fogBase,storm*.2);
     snow.update(dt,elapsed,windX,windZ);
     if(game.G.menu||game.G.replay||game.phys.crashed)state.throttle=0;
     rocket.update(dt,elapsed);
     updateEngineSound();
     const equipped=state.rocket&&game.G.discipline==='snowboard';
-    const nextPanelKey=`${weather}:${equipped}:${game.G.discipline}`;
+    const nextPanelKey=`${weather}:${equipped}:${game.G.discipline}:${game.G.tod}`;
     if(nextPanelKey!==panelKey){
       weatherButton.innerHTML=`天气：${weatherNames[weather]||'晴天'} <kbd>N</kbd>`;
       boardButton.innerHTML=`${equipped?'火箭单板':game.G.discipline==='ski'?'双板 · 换火箭板':'普通单板'} <kbd>B</kbd>`;
       boardButton.setAttribute('aria-pressed',String(equipped));
       boardButton.setAttribute('aria-label',equipped?'卸下火箭推进器':'装备火箭单板');
+      timeButton.innerHTML=`${game.G.tod==='golden'?'粉紫晚霞':'清晨'} <kbd>H</kbd>`;
       panelKey=nextPanelKey;
     }
     panel.querySelector('.fl-rocket-readout').hidden=!equipped;
