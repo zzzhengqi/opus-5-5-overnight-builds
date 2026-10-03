@@ -5,7 +5,7 @@
   const weatherNames = {clear: '晴天', snow: '暴雪', blizzard: '暴雪'};
   let game, engine, snow, rocket, panel, weatherButton, boardButton, timeButton, status, fuelBar, heatBar, engineSound;
   let storm = 0, precipitation = 0, elapsed = 0, padToggleHeld = false, panelKey = '';
-  const state = {rocket: false, fuel: 100, heat: 0, throttle: 0, locked: false, rechargeDelay: 0, weather: 'blizzard', snowImpacts: 0, assist: true, assistedLandings: 0};
+  const state = {rocket: false, fuel: 100, heat: 0, throttle: 0, locked: false, rechargeDelay: 0, weather: 'blizzard', snowImpacts: 0, assist: true, assistedLandings: 0, recoveries: 0};
 
   // Right click is inert, including the activity handler that normally starts the demo.
   for (const type of ['contextmenu', 'pointerdown', 'pointerup', 'mousedown', 'mouseup', 'auxclick']) {
@@ -52,13 +52,15 @@
       .fl-hud-panel-shell{position:absolute;bottom:34px;pointer-events:auto}
       .fl-hud-controls-shell{left:44px;width:max-content;min-width:300px}
       .fl-hud-upgrade-shell{left:50%;transform:translateX(-50%);width:520px}
-      .fl-hud-panel-shell[data-panel-mode=hidden]{width:auto;min-width:0}
+      .fl-hud-panel-shell[data-panel-mode=hidden][data-panel-revealed=false]>.fl-hud-panel-tools,.fl-hud-panel-shell[data-panel-mode=hidden][data-panel-revealed=false]>.fl-controls,.fl-hud-panel-shell[data-panel-mode=hidden][data-panel-revealed=false]>.fl-upgrade{visibility:hidden;opacity:0;pointer-events:none}
       .fl-hud-panel-shell .fl-controls,.fl-hud-panel-shell .fl-upgrade{position:relative;left:auto;bottom:auto;transform:none}
       .fl-hud-panel-tools{display:flex;align-items:center;gap:8px;padding:7px 10px;background:#071421e6;border:1px solid #7fe7ff40;border-bottom:0}
       .fl-hud-panel-title{flex:1;color:#c9e7f4;font:600 14px var(--fd)}
-      .fl-hud-panel-shell .fl-panel-choice,.fl-hud-panel-shell .fl-panel-launcher{color:#eaf7ff;border:1px solid #7fe7ff55;background:#071421df;padding:5px 10px;font:600 14px var(--fd);cursor:pointer}
+      .fl-hud-panel-shell .fl-panel-choice,.fl-hud-panel-shell .fl-panel-option{color:#eaf7ff;border:1px solid #7fe7ff55;background:#071421df;padding:5px 10px;font:600 14px var(--fd);cursor:pointer}
       .fl-hud-panel-shell .fl-panel-choice[aria-pressed=true]{color:#7fe7ff;border-color:#7fe7ff;background:#7fe7ff18}
-      .fl-hud-panel-shell .fl-panel-launcher{padding:9px 14px;color:#bfefff}
+      .fl-panel-option{display:flex;align-items:center;gap:5px}.fl-panel-option input{margin:0;accent-color:#7fe7ff;cursor:pointer}
+      .fl-panel-option:has(input:checked){color:#7fe7ff;border-color:#7fe7ff}
+      .fl-hud-panel-shell:focus-visible{outline:2px solid #7fe7ff;outline-offset:2px}
       .fl-hud-panel-shell button:hover,.fl-hud-panel-shell button:focus-visible{outline:2px solid #7fe7ff;outline-offset:2px}
       .fl-hud-panel-shell [hidden]{display:none!important}
       .fl-root.is-modal .fl-hud-panel-shell,.fl-root[data-mode=menu] .fl-hud-panel-shell,.fl-root[data-mode=results] .fl-hud-panel-shell{visibility:hidden;pointer-events:none}
@@ -100,36 +102,50 @@
       const shell=document.createElement('div');
       shell.className=`fl-hud-panel-shell fl-hud-${name}-shell`;
       shell.dataset.panel=name;
+      shell.tabIndex=0;shell.setAttribute('role','group');
+      shell.setAttribute('aria-label',`${label}：隐藏时移入此区域显示`);
       const tools=document.createElement('div');tools.className='fl-hud-panel-tools';
-      tools.innerHTML=`<span class="fl-hud-panel-title">${label}</span><button type="button" class="fl-panel-choice" data-panel-action="pin" aria-label="固定显示${label}">固定显示</button><button type="button" class="fl-panel-choice" data-panel-action="hide" aria-label="隐藏${label}">隐藏</button>`;
-      const launcher=document.createElement('button');launcher.type='button';launcher.className='fl-panel-launcher';
-      launcher.dataset.panelAction='show';launcher.textContent=`显示${label}`;launcher.title='点击恢复固定显示';
+      tools.innerHTML=`<span class="fl-hud-panel-title">${label}</span><button type="button" class="fl-panel-choice" data-panel-action="pin" aria-label="固定显示${label}">固定显示</button><label class="fl-panel-option" title="隐藏整个面板，鼠标移入原范围时显示"><input type="checkbox" data-panel-action="hide" aria-label="自动隐藏${label}">隐藏</label>`;
       node.id||=`fl-hud-${name}-body`;
-      launcher.setAttribute('aria-controls',node.id);
-      node.parentNode.insertBefore(shell,node);shell.append(tools,node,launcher);
+      node.parentNode.insertBefore(shell,node);shell.append(tools,node);
       const pin=tools.querySelector('[data-panel-action=pin]'),hide=tools.querySelector('[data-panel-action=hide]');
       pin.setAttribute('aria-controls',node.id);hide.setAttribute('aria-controls',node.id);
+      let revealed=false;
       const render=()=>{
         const fixed=modes[name]==='fixed';shell.dataset.panelMode=modes[name];
-        node.hidden=!fixed;tools.hidden=!fixed;launcher.hidden=fixed;
-        pin.setAttribute('aria-pressed',String(fixed));launcher.setAttribute('aria-expanded',String(fixed));
+        shell.dataset.panelRevealed=String(fixed||revealed);
+        // Keep the original footprint as an invisible hover target, even when the options are hidden.
+        node.hidden=false;tools.hidden=false;
+        pin.setAttribute('aria-pressed',String(fixed));hide.checked=!fixed;
       };
       const choose=(event,mode)=>{
-        modes[name]=mode;render();game.input.lastActivity=performance.now();
+        modes[name]=mode;revealed=false;render();game.input.lastActivity=performance.now();
         try{localStorage.setItem(storageKey,JSON.stringify(modes));}catch{}
-        if(event.detail===0)(mode==='fixed'?pin:launcher).focus({preventScroll:true});
+        if(mode==='fixed'&&event.detail===0)pin.focus({preventScroll:true});
         else event.currentTarget.blur();
       };
       pin.addEventListener('click',event=>choose(event,'fixed'));
-      hide.addEventListener('click',event=>choose(event,'hidden'));
-      launcher.addEventListener('click',event=>choose(event,'fixed'));
+      hide.addEventListener('change',event=>choose(event,hide.checked?'hidden':'fixed'));
+      shell.addEventListener('pointerenter',()=>{revealed=true;render();game.input.lastActivity=performance.now();});
+      shell.addEventListener('pointerleave',()=>{
+        revealed=false;
+        if(modes[name]==='hidden'&&shell.contains(document.activeElement))document.activeElement.blur();
+        render();
+      });
+      shell.addEventListener('focusin',()=>{revealed=true;render();});
+      shell.addEventListener('focusout',()=>queueMicrotask(()=>{
+        if(!shell.contains(document.activeElement)&&!shell.matches(':hover')){revealed=false;render();}
+      }));
       // Panel clicks change presentation only; keyboard riding remains available after a mouse click.
       for(const type of ['pointerdown','pointerup','mousedown','mouseup'])shell.addEventListener(type,event=>{
         if(type==='pointerdown')game.input.lastActivity=performance.now();
         event.stopPropagation();
       });
       for(const type of ['keydown','keyup'])shell.addEventListener(type,event=>{
-        if(event.target.tagName==='BUTTON'&&(event.code==='Space'||event.code==='Enter'))event.stopPropagation();
+        if(event.code==='Space'||event.code==='Enter'){
+          event.stopPropagation();
+          if(event.target===shell){event.preventDefault();if(type==='keydown'){revealed=true;render();pin.focus({preventScroll:true});}}
+        }
       });
       render();
     }
@@ -356,12 +372,58 @@
     game.phys.reset=function(...args){state.throttle=0;return reset(...args);};
     installLandingAssist();
   }
+  function installStableHelmet(){
+    const rig=game.rig,nativeUpdate=rig.update.bind(rig);
+    const heading=new engine.Vector3(),target=new engine.Vector3(),look=new engine.Vector3();
+    let active=false,eyeHeight=1.6,eyeForward=.6;
+    rig.update=function(dt,data){
+      if(this.mode!=='helmet'||data.crashed){active=false;return nativeUpdate(dt,data);}
+      dt=clamp(dt,0,.05);this.time+=dt;this.shake=0;
+      const speed=Math.hypot(data.vel.x,data.vel.z);
+      if(speed>1.5)target.set(data.vel.x/speed,0,data.vel.z/speed);
+      else target.copy(game.phys.f).multiplyScalar(game.phys.travelDir).setY(0).normalize();
+      // Follow travel direction, not the animated head's alternating sideways pose.
+      target.y=data.airborne?-.06:clamp(data.vel.y/Math.max(speed,1),-.38,.18);
+      target.normalize();
+      const nextHeight=clamp(this.headPos.y-data.pos.y,.9,1.85);
+      const nextForward=clamp((this.headPos.x-data.pos.x)*target.x+(this.headPos.z-data.pos.z)*target.z,.1,1.6)+.18;
+      if(!active||this.cut){heading.copy(target);eyeHeight=nextHeight;eyeForward=nextForward;}
+      else{heading.lerp(target,1-Math.exp(-dt*7)).normalize();eyeHeight+=(nextHeight-eyeHeight)*(1-Math.exp(-dt*4));eyeForward+=(nextForward-eyeForward)*(1-Math.exp(-dt*4));}
+      active=true;
+      const camera=this.camera;
+      camera.position.copy(data.pos);camera.position.x+=heading.x*eyeForward;camera.position.z+=heading.z*eyeForward;
+      camera.position.y+=eyeHeight;
+      camera.position.y=Math.max(camera.position.y,game.world.height(camera.position.x,camera.position.z)+.6);
+      camera.up.set(0,1,0);camera.lookAt(look.copy(camera.position).add(heading));
+      this._hfwd?.copy(heading);this.fov+=(78-this.fov)*(1-Math.exp(-dt*4));
+      camera.fov=this.fov;camera.updateProjectionMatrix();this.slowmo=1;this.cut=false;
+    };
+  }
+  function recoveryPoint(){
+    const p=game.phys,world=game.world,center=p.p.clone();
+    if(game.rider.inRagdoll)game.rider.ragdollCenter(center);
+    const x=clamp(center.x,-1850,1850),z=clamp(center.z,-1850,1850);
+    const normal=new engine.Vector3();let best=null,bestScore=Infinity;
+    for(const radius of [0,3,6,10,16,24,36]){
+      for(let i=0;i<(radius?12:1);i++){
+        const angle=i*Math.PI/6,cx=clamp(x+Math.cos(angle)*radius,-1850,1850),cz=clamp(z+Math.sin(angle)*radius,-1850,1850);
+        world.normal(cx,cz,normal,1);
+        const blocked=world.obstaclesNear(cx,cz,5,[]).some(o=>Math.hypot(cx-o.x,cz-o.z)<(o.r||1)+1.8);
+        const score=Math.hypot(cx-x,cz-z)+Math.max(0,.72-normal.y)*12+(blocked?1000:0)+Math.max(0,.5-normal.y)*1000;
+        if(score<bestScore){bestScore=score;best={x:cx,z:cz,h:Math.hypot(normal.x,normal.z)>.02?Math.atan2(normal.z,normal.x):Math.atan2(p.f.z*p.travelDir,p.f.x*p.travelDir),t:p.time,speed:0};}
+      }
+      if(bestScore<radius+3)break;
+    }
+    state.recoveries++;state.lastRecovery={from:[x,z],to:[best.x,best.z],distance:Math.hypot(best.x-x,best.z-z)};
+    game.ui.popup('就近起身 · 继续滑行','info');
+    return best;
+  }
   function install(dbg, nativeEngine){
     game=dbg;engine=nativeEngine;
     game.particles.snowfall.visible=false;game.particles.dust.visible=false;
     game.particles.setSnowfall=function(){this.snowfall.visible=false;};
-    snow=createSnow();rocket=createRocket();installPhysics();addPanel();
-    window.GAME.upgrades={state,setWeather,cycleWeather,setRocket,snow,rocket};
+    snow=createSnow();rocket=createRocket();installPhysics();installStableHelmet();addPanel();
+    window.GAME.upgrades={state,setWeather,cycleWeather,setRocket,snow,rocket,recoveryPoint};
     game.G.weather='blizzard';game.G.wx=1;storm=1;precipitation=1;
     game.setTimeOfDay('golden');
     game.G.hintKey='';
@@ -386,6 +448,7 @@
   }
   function update(dt,time){
     if(!game)return;
+    game.rider.setHeadVisible(game.G.cam!=='helmet'||!!game.G.replay||game.phys.crashed);
     dt=clamp(dt,0,.05);elapsed+=dt;
     const padHeld=!!game.input.pad?.buttons[15]?.pressed;
     if(padHeld&&!padToggleHeld&&!game.G.menu&&!game.G.replay)setRocket(!state.rocket);
